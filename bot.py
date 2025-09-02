@@ -1,23 +1,26 @@
 import os
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, MessageHandler, CommandHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 # Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Put your channel username (@channelusername) or ID
 
-# Simple in-memory DB (replace with SQLite/PostgreSQL for persistence)
+# In-memory database
 file_db = {}
 
-# Index uploaded files
-async def index_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    document = update.message.document
-    if document:
-        file_id = document.file_id
-        file_name = document.file_name
-        file_db[file_name.lower()] = file_id
-        await update.message.reply_text(f"Indexed file: {file_name}")
+# Index files posted in the channel
+async def index_channel_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Only process messages from the channel
+    if update.channel_post:
+        document = update.channel_post.document
+        if document:
+            file_id = document.file_id
+            file_name = document.file_name
+            file_db[file_name.lower()] = file_id
+            print(f"Indexed: {file_name}")  # Optional logging
 
 # Search files by keyword
 async def search_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,9 +49,12 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello! Send files to this bot to index them, or use /search <keyword> to find files.")
+    await update.message.reply_text(
+        "Hello! This bot indexes files from your channel. "
+        "Use /search <keyword> to find files."
+    )
 
-# Main
+# Main function
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -56,7 +62,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("search", search_file))
     app.add_handler(CommandHandler("get", get_file))
-    app.add_handler(MessageHandler(filters.Document.ALL, index_file))
+    app.add_handler(MessageHandler(filters.Document.ALL & filters.ChatType.CHANNEL, index_channel_file))
 
     print("Bot is running...")
     app.run_polling()
